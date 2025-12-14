@@ -427,7 +427,11 @@ export abstract class Actor<E> extends DurableObject<E> {
                     await trackerActor.sql`DELETE FROM actors WHERE identifier = ${this.name};`;
                 }
             } catch (e) {
-                console.error(`Failed to delete actor from tracking instance: ${e instanceof Error ? e.message : 'Unknown error'}`);
+                // Silently ignore "no such table" error - tracking was never enabled
+                const msg = e instanceof Error ? e.message : '';
+                if (!msg.includes('no such table')) {
+                    console.error(`Failed to delete actor from tracking instance: ${msg || 'Unknown error'}`);
+                }
             }
         }
 

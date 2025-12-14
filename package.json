@@ -1,7 +1,7 @@
 {
-    "name": "@cloudflare/actors",
-    "version": "0.0.1-beta.6",
-    "description": "An easier way to build with Cloudflare Durable Objects",
+    "name": "@flicknote/actors",
+    "version": "0.0.1",
+    "description": "An easier way to build with Cloudflare Durable Objects (FlickNote fork)",
     "type": "module",
     "main": "./dist/index.js",
     "workspaces": [
@@ -30,7 +30,9 @@
         "cf-typegen": "wrangler types",
         "build": "tsc -p ./packages",
         "dev": "vite",
-        "clean": "rm -rf dist .wrangler worker-configuration.d.ts"
+        "clean": "rm -rf dist .wrangler worker-configuration.d.ts",
+        "prepublishOnly": "npm run build",
+        "release": "npx semantic-release"
     },
     "engines": {
         "node": ">=18.0.0"
@@ -40,13 +42,14 @@
         "workers",
         "actor",
         "framework",
-        "distributed-systems"
+        "distributed-systems",
+        "flicknote"
     ],
-    "author": "Cloudflare",
+    "author": "FlickNote Team",
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/cloudflare/actors"
+        "url": "git@github.com:GuionAI/actors.git"
     },
     "optionalDependencies": {
         "cron-schedule": "^5.0.4",
@@ -54,8 +57,15 @@
     },
     "devDependencies": {
         "@cloudflare/vite-plugin": "1.12.3",
+        "@semantic-release/git": "^10.0.1",
+        "@semantic-release/npm": "^13.1.2",
+        "semantic-release": "^25.0.2",
         "typescript": "^5.5.2",
         "vite": "^6.3.5",
         "wrangler": "^4.34.0"
+    },
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
     }
 }

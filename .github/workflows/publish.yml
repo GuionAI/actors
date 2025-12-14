@@ -1,21 +1,35 @@
-name: Publish to NPM
+name: Release
+
 on:
-  release:
-    types: [created]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  id-token: write
+  issues: write
+  pull-requests: write
+
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Setup Node
-        uses: actions/setup-node@v2
+      - uses: actions/checkout@v4
         with:
-          node-version: "23.x"
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
-      - name: Install dependencies and build
-        run: npm ci --no-frozen-lockfile && npm run build
-      - name: Publish package on NPM
-        run: npm publish --access public
+          scope: "@flicknote"
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Semantic Release
+        run: npm run release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

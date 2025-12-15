@@ -3,6 +3,7 @@ import { Storage } from "../../storage/src/index";
 import { Alarms } from "../../alarms/src/index";
 import { Sockets } from "../../sockets/src/index";
 import { Persist, PERSISTED_VALUES, initializePersistedProperties, persistProperty } from "./persist";
+import { deleteActorFromTracking } from "./db/queries";
 
 export { Persist };
 
@@ -421,17 +422,9 @@ export abstract class Actor<E> extends DurableObject<E> {
     async destroy(_?: { forceEviction?: boolean }) {
         // If tracking instance is defined, delete the instance name from the tracking instance map.
         if (this.name) {
-            try {
-                const trackerActor = getActor(this.constructor as ActorConstructor<Actor<E>>, TRACKING_ACTOR_NAME) as unknown as Actor<E>;
-                if (trackerActor) {
-                    await trackerActor.sql`DELETE FROM actors WHERE identifier = ${this.name};`;
-                }
-            } catch (e) {
-                // Silently ignore "no such table" error - tracking was never enabled
-                const msg = e instanceof Error ? e.message : '';
-                if (!msg.includes('no such table')) {
-                    console.error(`Failed to delete actor from tracking instance: ${msg || 'Unknown error'}`);
-                }
+            const trackerActor = getActor(this.constructor as ActorConstructor<Actor<E>>, TRACKING_ACTOR_NAME) as unknown as Actor<E>;
+            if (trackerActor) {
+                await deleteActorFromTracking(trackerActor, this.name);
             }
         }
 

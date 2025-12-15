@@ -1,6 +1,7 @@
 import { parseCronExpression } from "cron-schedule";
 import { nanoid } from "nanoid";
 import { DurableObject } from "cloudflare:workers";
+import { selectNextAlarm, selectDueAlarms, updateAlarmTime, deleteAlarmById } from "./db/queries";
 
 function getNextCronTime(cron: string) {
     const interval = parseCronExpression(cron);
@@ -266,41 +267,21 @@ export class Alarms<P extends DurableObject<any>> {
     }
 
     private async _scheduleNextAlarm() {
-        // Find the next schedule that needs to be executed
-        // Wrapped in try-catch because destroy() may have been called,
-        // which deletes all storage including the _actor_alarms table
-        let result;
-        try {
-            result = this.sql`
-              SELECT time, COALESCE(identifier, 'default') as identifier FROM _actor_alarms
-              WHERE time > ${Math.floor(Date.now() / 1000)}
-              ORDER BY time ASC
-              LIMIT 1
-            `;
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : '';
-            if (msg.includes('no such table')) {
-                return;
-            }
-            throw e;
-        }
-        if (!result || !this.storage) return;
+        if (!this.storage?.sql) return;
 
-        if (result.length > 0 && "time" in result[0]) {
-          const nextTime = (result[0].time as number) * 1000;
-          await this.storage.setAlarm(nextTime);
-        }
+        const result = selectNextAlarm(this.storage.sql);
+        if (!result || result.length === 0) return;
+
+        await this.storage.setAlarm(result[0].time * 1000);
     }
 
     public readonly alarm = async (alarmInfo?: AlarmInvocationInfo) => {
-        const now = Math.floor(Date.now() / 1000);
-    
-        // Get all schedules that should be executed now
-        const result = this.sql<Schedule<string>>`
-          SELECT *, COALESCE(identifier, 'default') as identifier FROM _actor_alarms WHERE time <= ${now}
-        `;
-    
-        for (const row of result || []) {
+        if (!this.storage?.sql) return;
+
+        const result = selectDueAlarms(this.storage.sql);
+        if (!result) return;
+
+        for (const row of result) {
           const callback = this.parent[row.callback as keyof P];
           if (!callback) {
             console.error(`callback ${row.callback} not found`);
@@ -313,7 +294,7 @@ export class Alarms<P extends DurableObject<any>> {
           } catch (error) {
             console.error(`error setting identifier`, error);
           }
-          
+
           try {
             await (
               callback as (
@@ -324,34 +305,17 @@ export class Alarms<P extends DurableObject<any>> {
           } catch (e) {
             console.error(`error executing callback "${row.callback}"`, e);
           }
-          
-          // Wrap in try-catch because destroy() may have been called inside the callback,
-          // which deletes all storage including the _actor_alarms table
-          try {
-            if (row.type === "cron") {
-              // Update next execution time for cron schedules
-              const nextExecutionTime = getNextCronTime(row.cron);
-              const nextTimestamp = Math.floor(nextExecutionTime.getTime() / 1000);
 
-              this.sql`
-                UPDATE _actor_alarms SET time = ${nextTimestamp} WHERE id = ${row.id}
-              `;
-            } else {
-              // Delete one-time schedules after execution
-              this.sql`
-                DELETE FROM _actor_alarms WHERE id = ${row.id}
-              `;
-            }
-          } catch (e) {
-            // Silently ignore "no such table" error - actor was likely destroyed in the callback
-            const msg = e instanceof Error ? e.message : '';
-            if (!msg.includes('no such table')) {
-              throw e;
-            }
+          // Update or delete alarm (safe if destroy() was called in callback)
+          if (row.type === "cron") {
+            const nextExecutionTime = getNextCronTime(row.cron);
+            const nextTimestamp = Math.floor(nextExecutionTime.getTime() / 1000);
+            updateAlarmTime(this.storage.sql, row.id, nextTimestamp);
+          } else {
+            deleteAlarmById(this.storage.sql, row.id);
           }
         }
 
-        // Schedule the next alarm
         await this._scheduleNextAlarm();
     };
 

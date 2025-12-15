@@ -61,10 +61,6 @@ export abstract class Entrypoint<T> extends WorkerEntrypoint {
  * @template E - The type of the environment object that will be available to the actor
  */
 export abstract class Actor<E> extends DurableObject<E> {
-    /**
-     * @deprecated Use `name` instead as that maps to the value from `nameFromRequest`
-     */
-    public identifier?: string;
     private _name?: string;
     private _onInitCalled: boolean;
     private _setNameCalled: boolean;
@@ -82,13 +78,12 @@ export abstract class Actor<E> extends DurableObject<E> {
      * @param id The identifier to set
      */
     public async setName(id: string) {
-        this.identifier = id;
         this._name = id;
         this._setNameCalled = true;
-      
+
         // Set the actor name on our alarm so it can store a reference to the actor
         // when an alarm is set (so actors awoken by alarms can be referenced by name).
-        this.alarms.actorName = this.identifier;
+        this.alarms.actorName = id;
 
         // Call onInit if it hasn't been called yet
         if (!this._onInitCalled) {
@@ -176,12 +171,8 @@ export abstract class Actor<E> extends DurableObject<E> {
             (this as any)[PERSISTED_VALUES] = new Map<string, any>();
         }
 
-        // Set a default identifier or name if none exists
-        if (!this.identifier) {
-            this.identifier = DEFAULT_ACTOR_NAME;
-        }
-
-        if (!this.name) {
+        // Set a default name if none exists
+        if (!this._name) {
             this._name = DEFAULT_ACTOR_NAME;
         }
     }

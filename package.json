@@ -1,6 +1,6 @@
 {
     "name": "@flicknote/actors",
-    "version": "0.0.1",
+    "version": "1.0.0",
     "description": "An easier way to build with Cloudflare Durable Objects (FlickNote fork)",
     "type": "module",
     "main": "./dist/index.js",
@@ -16,9 +16,15 @@
     "types": "./dist/core/src/index.d.ts",
     "typesVersions": {
         "*": {
-            ".": ["./dist/core/src/index.d.ts"],
-            "storage": ["./dist/storage/src/index.d.ts"],
-            "alarms": ["./dist/alarms/src/index.d.ts"]
+            ".": [
+                "./dist/core/src/index.d.ts"
+            ],
+            "storage": [
+                "./dist/storage/src/index.d.ts"
+            ],
+            "alarms": [
+                "./dist/alarms/src/index.d.ts"
+            ]
         }
     },
     "files": [

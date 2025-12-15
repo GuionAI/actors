@@ -267,12 +267,23 @@ export class Alarms<P extends DurableObject<any>> {
 
     private async _scheduleNextAlarm() {
         // Find the next schedule that needs to be executed
-        const result = this.sql`
-          SELECT time, COALESCE(identifier, 'default') as identifier FROM _actor_alarms 
-          WHERE time > ${Math.floor(Date.now() / 1000)}
-          ORDER BY time ASC 
-          LIMIT 1
-        `;
+        // Wrapped in try-catch because destroy() may have been called,
+        // which deletes all storage including the _actor_alarms table
+        let result;
+        try {
+            result = this.sql`
+              SELECT time, COALESCE(identifier, 'default') as identifier FROM _actor_alarms
+              WHERE time > ${Math.floor(Date.now() / 1000)}
+              ORDER BY time ASC
+              LIMIT 1
+            `;
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : '';
+            if (msg.includes('no such table')) {
+                return;
+            }
+            throw e;
+        }
         if (!result || !this.storage) return;
 
         if (result.length > 0 && "time" in result[0]) {
@@ -314,22 +325,32 @@ export class Alarms<P extends DurableObject<any>> {
             console.error(`error executing callback "${row.callback}"`, e);
           }
           
-          if (row.type === "cron") {
-            // Update next execution time for cron schedules
-            const nextExecutionTime = getNextCronTime(row.cron);
-            const nextTimestamp = Math.floor(nextExecutionTime.getTime() / 1000);
-    
-            this.sql`
-              UPDATE _actor_alarms SET time = ${nextTimestamp} WHERE id = ${row.id}
-            `;
-          } else {
-            // Delete one-time schedules after execution
-            this.sql`
-              DELETE FROM _actor_alarms WHERE id = ${row.id}
-            `;
+          // Wrap in try-catch because destroy() may have been called inside the callback,
+          // which deletes all storage including the _actor_alarms table
+          try {
+            if (row.type === "cron") {
+              // Update next execution time for cron schedules
+              const nextExecutionTime = getNextCronTime(row.cron);
+              const nextTimestamp = Math.floor(nextExecutionTime.getTime() / 1000);
+
+              this.sql`
+                UPDATE _actor_alarms SET time = ${nextTimestamp} WHERE id = ${row.id}
+              `;
+            } else {
+              // Delete one-time schedules after execution
+              this.sql`
+                DELETE FROM _actor_alarms WHERE id = ${row.id}
+              `;
+            }
+          } catch (e) {
+            // Silently ignore "no such table" error - actor was likely destroyed in the callback
+            const msg = e instanceof Error ? e.message : '';
+            if (!msg.includes('no such table')) {
+              throw e;
+            }
           }
         }
-    
+
         // Schedule the next alarm
         await this._scheduleNextAlarm();
     };
